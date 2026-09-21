@@ -8,7 +8,7 @@
     </div>
 
     <q-banner v-if="job" rounded class="q-mb-md" :class="statusBannerClass">
-      状态：{{ statusLabel(paintJobStatus(job.status)) }}
+      状态：{{ statusLabel(job.status) }}
       · 样例：{{ job.sample_name }}
       · 提交人：{{ job.created_by }}
       <div v-if="job.error_message" class="q-mt-sm">失败原因：{{ job.error_message }}</div>
@@ -69,7 +69,6 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { getJob, getJobStages } from '../api/client'
-import { normalizeStageRow, paintJobStatus } from '../utils/stageDisplay.js'
 
 const route = useRoute()
 const $q = useQuasar()
@@ -151,7 +150,7 @@ async function load() {
   try {
     const id = route.params.id
     job.value = await getJob(id)
-    stages.value = (await getJobStages(id)).map(normalizeStageRow)
+    stages.value = await getJobStages(id)
   } catch (e) {
     $q.notify({ type: 'negative', message: e.message || '加载失败' })
   } finally {

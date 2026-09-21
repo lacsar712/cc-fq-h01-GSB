@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models import Job, JobStage
-from app.SkipStageBypass import coerce_job_success, rewrite_stage_status
 from app.pipeline.actors import (
     ACTOR_CHAIN,
     NContentActor,
@@ -65,6 +64,13 @@ async def _run_chain(fastq_text: str) -> tuple[bool, PipelineContext, dict[str, 
     return final.ok, final.context, stage_status
 
 
+def _job_success(pipeline_ok: bool, stage_status: dict[str, dict]) -> bool:
+    """作业成功 <=> 流水线成功且无任何失败阶段（含失败阶段时禁止写成成功）。"""
+    if not pipeline_ok:
+        return False
+    return not any(info["status"] == "failed" for info in stage_status.values())
+
+
 def run_pipeline_sync(db: Session, job: Job) -> Job:
     """Execute pipeline for a job and update DB stages/metrics."""
     stages = (
@@ -79,8 +85,7 @@ def run_pipeline_sync(db: Session, job: Job) -> Job:
     db.commit()
 
     success, ctx, stage_status = asyncio.run(_run_chain(job.fastq_snapshot))
-    stage_status = rewrite_stage_status(stage_status)
-    success = coerce_job_success(success, stage_status)
+    success = _job_success(success, stage_status)
 
     for name, info in stage_status.items():
         st = stage_by_name[name]
