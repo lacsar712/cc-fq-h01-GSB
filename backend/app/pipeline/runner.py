@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models import Job, JobStage
-from app.SkipStageBypass import coerce_job_success, rewrite_stage_status
 from app.pipeline.actors import (
     ACTOR_CHAIN,
     NContentActor,
@@ -79,8 +78,10 @@ def run_pipeline_sync(db: Session, job: Job) -> Job:
     db.commit()
 
     success, ctx, stage_status = asyncio.run(_run_chain(job.fastq_snapshot))
-    stage_status = rewrite_stage_status(stage_status)
-    success = coerce_job_success(success, stage_status)
+
+    # Invariant: a failed stage fails the whole job; later stages stay skipped.
+    if any(info["status"] == "failed" for info in stage_status.values()):
+        success = False
 
     for name, info in stage_status.items():
         st = stage_by_name[name]
